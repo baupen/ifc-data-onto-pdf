@@ -1,6 +1,7 @@
 import subprocess
 import cv2
 import sys
+import os
 import json
 import numpy as np
 from os import path
@@ -18,9 +19,12 @@ def remove_file_type(list_of_names, file_type):
     return [file_name[:-len(file_type)-1] for file_name in list_of_names]
 
 
-def produce_image_from_pdf():
-    # TODO: implement
-    return
+def produce_image_from_pdf(pair_name):
+    pdf_name = '{}.pdf'.format(pair_name)
+    jpeg_name = '{}.jpeg'.format(pair_name)
+    args = ['gs', '-sDEVICE=jpeg', '-dDEVICEWIDTHPOINTS=1920', '-dDEVICEHEIGHTPOINTS=1080', '-dJPEGQ=10', '-dUseCropBox', '-sPageList=1', '-o', jpeg_name, pdf_name]
+    sp_result = subprocess.run(args)
+    return sp_result.returncode
 
 
 def write_json(plan_name, position_triple, img_shape):
@@ -53,7 +57,8 @@ def write_json(plan_name, position_triple, img_shape):
 
 
 if __name__ == "__main__":
-    folder_path = sys.argv[1]
+    assert sys.argv[1] == "-d"
+    folder_path = sys.argv[2]
 
     full_pdf_names = find_ext(folder_path, 'pdf')
     full_json_names = find_ext(folder_path, 'json')
@@ -64,7 +69,8 @@ if __name__ == "__main__":
     names_of_pairs = set(pdf_names).intersection(json_names)
 
     for pair_name in names_of_pairs:
-        produce_image_from_pdf(pair_name)
+        if produce_image_from_pdf(pair_name):
+            continue
         gray_image = cv2.imread("{}.jpeg".format(pair_name), cv2.IMREAD_GRAYSCALE)
         gray_image = cv2.normalize(gray_image, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
         _, gray_image = cv2.threshold(gray_image, 0.5, 1., cv2.THRESH_BINARY)
@@ -75,7 +81,9 @@ if __name__ == "__main__":
             candidate_triples.append(det_mec.get_candidate_triple())
 
         index = np.argmin([tri[0] for tri in candidate_triples])
-
+        
         write_json(pair_name, candidate_triples[index], gray_image.shape)
+        
+        os.remove("{}.jpeg".format(pair_name))
 
 
